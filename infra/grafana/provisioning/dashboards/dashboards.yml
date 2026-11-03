@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: pka
+    folder: Personal Knowledge Agent
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

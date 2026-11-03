@@ -1,0 +1,145 @@
+# Personal Knowledge Agent — full stack.
+#
+#   docker compose up -d                          # postgres, redis, rabbitmq, migrate, api, worker
+#   docker compose --profile ollama up -d         # also run Ollama in a container (Linux / no host Ollama)
+#   docker compose --profile observability up -d  # also prometheus, grafana, jaeger
+#
+# By default the LLM is the Ollama server on the host (on macOS, containerised Ollama has no
+# Metal acceleration, so the host server is 5-10x faster). Override LLM_BASE_URL to change it.
+
+x-app: &app
+  build: .
+  image: personal-knowledge-agent:latest
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATABASE_URL: postgresql+asyncpg://pka:pka@postgres:5432/pka
+    READONLY_DATABASE_URL: postgresql://pka_ro:pka_ro@postgres:5432/pka
+    REDIS_URL: redis://redis:6379/0
+    AMQP_URL: amqp://pka:pka@rabbitmq:5672/
+    LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+    LLM_MODEL: ${LLM_MODEL:-gemma4:12b}
+    UPLOAD_DIR: /data/uploads
+    CORPUS_ROOT: /corpus
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ${HF_CACHE:-hf-cache}:/root/.cache/huggingface
+    - ${CORPUS_DIR:-./corpus}:/corpus:ro
+    - uploads:/data/uploads
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: pka
+      POSTGRES_PASSWORD: pka
+      POSTGRES_DB: pka
+    ports: ["5433:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pka -d pka"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: pka
+      RABBITMQ_DEFAULT_PASS: pka
+    ports: ["5672:5672", "15672:15672"]
+    volumes:
+      - rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *app
+    command: ["uvicorn", "pka.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["8000:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "pka.workers", "--queues", "ingest,reindex,memory"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    ports: ["11435:11434"]
+    volumes:
+      - ollama:/root/.ollama
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["observability"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    profiles: ["observability"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    profiles: ["observability"]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports: ["16686:16686", "4318:4318"]
+
+volumes:
+  pgdata:
+  rabbitdata:
+  hf-cache:
+  uploads:
+  ollama:

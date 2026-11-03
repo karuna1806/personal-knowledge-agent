@@ -1,0 +1,165 @@
+# Golden set over ./corpus (the architecture document + the early RAG scripts).
+#
+# expected: locators — {source: <suffix of source_uri>, contains: <phrase in the chunk>}.
+#   A locator is satisfied by any chunk of that source containing the phrase, so labels
+#   survive re-ingestion and different chunking strategies. Keep phrases short (< 150
+#   chars) so a fixed-size chunker with 200-char overlap can always contain them whole.
+# answerable: false → the corpus cannot answer; the correct response is a refusal.
+#
+# This is a starter set (34). The architecture calls for 50–80 questions taken from real
+# queries; grow it from query_logs as I use the system.
+
+questions:
+  # ── lookup: single-chunk facts ───────────────────────────────
+  - id: L01
+    category: lookup
+    question: Which index type did I choose for pgvector, and why not IVFFlat?
+    expected: [{source: architecture.md, contains: "HNSW gives better recall-latency tradeoff"}]
+  - id: L02
+    category: lookup
+    question: What distance metric do my embeddings use and why?
+    expected: [{source: architecture.md, contains: "Distance metric — cosine"}]
+  - id: L03
+    category: lookup
+    question: How long are query results cached in Redis?
+    expected: [{source: architecture.md, contains: "q:{sha256(normalized_query)}"}]
+  - id: L04
+    category: lookup
+    question: Why did I pick arq instead of Celery?
+    expected: [{source: architecture.md, contains: "Celery is the default and it"}]
+  - id: L05
+    category: lookup
+    question: Why not use Kafka for the queue?
+    expected: [{source: architecture.md, contains: "Kafka is a distributed commit log"}]
+  - id: L06
+    category: lookup
+    question: What happens to the system if Redis goes down?
+    expected: [{source: architecture.md, contains: "Redis holds nothing whose loss matters"}]
+  - id: L07
+    category: lookup
+    question: Why use Server-Sent Events rather than WebSockets?
+    expected: [{source: architecture.md, contains: "Token streaming is unidirectional"}]
+  - id: L08
+    category: lookup
+    question: What model size and quantization did I plan to start with?
+    expected: [{source: architecture.md, contains: "start with a 7–8B instruct model"}]
+  - id: L09
+    category: lookup
+    question: What are the exit criteria before moving past the skeleton phase?
+    expected: [{source: architecture.md, contains: "Exit criteria for Phase 0"}]
+  - id: L10
+    category: lookup
+    question: How many tool calls can the agent make for one query?
+    expected: [{source: architecture.md, contains: "Max 3 tool calls per query"}]
+  - id: L11
+    category: lookup
+    question: How are memories scored when retrieving them?
+    expected: [{source: architecture.md, contains: "0.6 · cosine(query, memory.embedding)"}]
+  - id: L12
+    category: lookup
+    question: If the build falls behind schedule, what gets cut first?
+    expected: [{source: architecture.md, contains: "If I fall behind, cut in this order"}]
+  - id: L13
+    category: lookup
+    question: What is the difference between the health and readiness endpoints?
+    expected: [{source: architecture.md, contains: "`/health` and `/ready`"}]
+  - id: L14
+    category: lookup
+    question: Why FastAPI rather than Litestar?
+    expected: [{source: architecture.md, contains: "Why FastAPI over Litestar specifically"}]
+  - id: L15
+    category: lookup
+    question: Why is the project written in Python and not Go?
+    expected: [{source: architecture.md, contains: "The entire ML/RAG ecosystem is Python-native"}]
+
+  # ── exact identifiers: config keys, columns, function names ─
+  - id: I01
+    category: identifier
+    question: What is prefetch_count=1 for?
+    expected: [{source: architecture.md, contains: "`prefetch_count=1` prevents one worker"}]
+  - id: I02
+    category: identifier
+    question: What is the embed_model column on chunks used for?
+    expected: [{source: architecture.md, contains: "`embed_model` on chunks"}]
+  - id: I03
+    category: identifier
+    question: What does superseded_by do?
+    expected: [{source: architecture.md, contains: "`superseded_by` on memories"}]
+  - id: I04
+    category: identifier
+    question: What does hnsw.ef_search control?
+    expected: [{source: architecture.md, contains: "Query-time recall is tuned with `hnsw.ef_search`"}]
+  - id: I05
+    category: identifier
+    question: What does load_chunks do?
+    expected: [{source: rag.py, contains: "def load_chunks(path):"}]
+  - id: I06
+    category: identifier
+    question: What is LLM_BASE_URL set to on a GPU box?
+    expected: [{source: architecture.md, contains: "LLM_BASE_URL=http://ollama:11434/v1"}]
+  - id: I07
+    category: identifier
+    question: Why is there a unique constraint involving content_hash?
+    expected: [{source: architecture.md, contains: "`content_hash` + unique constraint"}]
+
+  # ── synthesis: needs two or more chunks ──────────────────────
+  - id: S01
+    category: synthesis
+    question: How does the design try to stop a small local model from hallucinating?
+    expected:
+      - {source: architecture.md, contains: "Four layers: structure-aware chunking"}
+      - {source: architecture.md, contains: "Why this matters more with a local model"}
+  - id: S02
+    category: synthesis
+    question: Which work is kept out of the request path, and why?
+    expected:
+      - {source: architecture.md, contains: "extraction is a second LLM call"}
+      - {source: architecture.md, contains: "the queue exists because embedding a 200-page PDF"}
+  - id: S03
+    category: synthesis
+    question: Why one Postgres instead of a dedicated vector database, and when would I switch?
+    expected:
+      - {source: architecture.md, contains: "Why one database instead of two"}
+      - {source: architecture.md, contains: "Move vectors to Qdrant once"}
+  - id: S04
+    category: synthesis
+    question: How does the architecture make tool use reliable with a 7B model?
+    expected:
+      - {source: architecture.md, contains: "Constrained decoding for tool arguments"}
+      - {source: architecture.md, contains: "Router-first, not agent-first"}
+
+  # ── code ─────────────────────────────────────────────────────
+  - id: C01
+    category: code
+    question: How does bench.py measure search latency?
+    expected: [{source: bench.py, contains: "brute force, no index"}]
+  - id: C02
+    category: code
+    question: What instructions does the build_prompt function in rag.py give the model?
+    expected: [{source: rag.py, contains: "Answer the question using ONLY the numbered context provided"}]
+
+  # ── negative: the corpus cannot answer — refusal is correct ─
+  - id: N01
+    category: negative
+    answerable: false
+    question: What is the capital of France?
+  - id: N02
+    category: negative
+    answerable: false
+    question: What salary am I targeting in my next role?
+  - id: N03
+    category: negative
+    answerable: false
+    question: Which cloud provider hosts the production deployment?
+  - id: N04
+    category: negative
+    answerable: false
+    question: What is my favourite programming font?
+  - id: N05
+    category: negative
+    answerable: false
+    question: How many users signed up last month?
+  - id: N06
+    category: negative
+    answerable: false
+    question: What values did I put in the Kubernetes Helm chart?

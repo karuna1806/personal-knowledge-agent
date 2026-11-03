@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Personal Knowledge Agent</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Personal Knowledge Agent</h1>
+    <nav>
+      <button data-tab="chat" class="active">Chat</button>
+      <button data-tab="corpus">Corpus</button>
+      <button data-tab="memory">Memory</button>
+    </nav>
+    <label class="key">API key <input id="api-key" type="password" autocomplete="off" placeholder="dev-key"></label>
+  </header>
+
+  <main>
+    <section id="tab-chat" class="tab active">
+      <div class="chat-layout">
+        <div class="chat">
+          <div id="messages" aria-live="polite"></div>
+          <form id="ask">
+            <select id="mode" title="Route">
+              <option value="auto">auto</option>
+              <option value="retrieve">retrieve</option>
+              <option value="tool">tool</option>
+              <option value="direct">direct</option>
+            </select>
+            <textarea id="query" rows="2" placeholder="Ask about my notes, code, documents…" required></textarea>
+            <button type="submit" id="send">Ask</button>
+          </form>
+          <div class="chat-actions"><button id="new-chat" type="button" class="link">New conversation</button><span id="conv-id"></span></div>
+        </div>
+        <aside id="sources-panel">
+          <h2>Sources</h2>
+          <p class="muted">Citations in the answer link here.</p>
+          <ol id="sources"></ol>
+          <div id="memories-used"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="tab-corpus" class="tab">
+      <div class="row">
+        <form id="ingest-path" class="card">
+          <h2>Ingest a path</h2>
+          <p class="muted">File or directory, relative to CORPUS_ROOT.</p>
+          <input id="path" placeholder="notes/ or notes/design.md" required>
+          <button type="submit">Queue</button>
+        </form>
+        <form id="ingest-url" class="card">
+          <h2>Ingest a URL</h2>
+          <input id="url" type="url" placeholder="https://…" required>
+          <button type="submit">Queue</button>
+        </form>
+        <form id="ingest-upload" class="card">
+          <h2>Upload a file</h2>
+          <input id="file" type="file" required>
+          <button type="submit">Upload</button>
+        </form>
+      </div>
+      <h2>Recent jobs <button id="refresh-jobs" class="link" type="button">refresh</button></h2>
+      <table id="jobs"><thead><tr><th>Status</th><th>Target</th><th>Chunks</th><th>Attempts</th><th>Error</th></tr></thead><tbody></tbody></table>
+      <h2>Documents</h2>
+      <table id="documents"><thead><tr><th>Type</th><th>Source</th><th>Title</th><th>Chunks</th><th></th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <section id="tab-memory" class="tab">
+      <h2>What the agent believes about me
+        <label class="inline"><input id="show-history" type="checkbox"> include superseded</label></h2>
+      <p class="muted">Extracted asynchronously from conversations. Retracting ends a memory's validity; nothing is deleted.</p>
+      <table id="memories"><thead><tr><th>Kind</th><th>Subject</th><th>Predicate</th><th>Object</th><th>Conf.</th><th>Since</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

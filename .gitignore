@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local config and secrets
+.env
+.env.*
+
+# Runtime data
+data/
+*.log
+
+# My own documents: ingested locally, not published.
+corpus/*
+!corpus/.gitkeep
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

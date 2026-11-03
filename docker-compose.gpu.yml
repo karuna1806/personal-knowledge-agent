@@ -1,0 +1,65 @@
+# GPU override: serve the LLM with vLLM instead of Ollama (§3.4). Same OpenAI-compatible
+# API, so only the base URL and model change.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# Requires an NVIDIA GPU with the NVIDIA Container Toolkit. vLLM's guided decoding backs
+# the router's and memory extractor's JSON-schema constrained output.
+
+x-vllm-env: &vllm-env
+  LLM_BASE_URL: http://vllm:8000/v1
+  LLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+  LLM_REASONING_EFFORT: ""
+  LLM_CONTEXT_TOKENS: "8192"
+  EMBED_DEVICE: cuda
+
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.32.0
+    command:
+      - --model=${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      - --max-model-len=8192
+      - --gpu-memory-utilization=0.80
+    ipc: host
+    ports: ["8001:8000"]
+    volumes:
+      - ${HF_CACHE:-hf-cache}:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 120s
+
+  migrate:
+    build: &gpu-build
+      context: .
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu128
+    image: personal-knowledge-agent:gpu
+
+  api:
+    build: *gpu-build
+    image: personal-knowledge-agent:gpu
+    environment: *vllm-env
+    depends_on:
+      vllm: { condition: service_healthy }
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+
+  worker:
+    build: *gpu-build
+    image: personal-knowledge-agent:gpu
+    environment: *vllm-env
+    depends_on:
+      vllm: { condition: service_healthy }
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]

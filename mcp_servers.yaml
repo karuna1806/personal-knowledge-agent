@@ -1,0 +1,27 @@
+# MCP servers the agent connects to at startup (stdio). Tools are discovered at runtime.
+# All shipped servers are read-only. ${PYTHON} is the interpreter running the API.
+# Any MCP-capable server works here, e.g. third-party ones via `npx` / `uvx`.
+servers:
+  filesystem:
+    command: ${PYTHON}
+    args: ["-m", "pka.mcp.servers.filesystem"]
+    env:
+      MCP_ALLOWED_ROOTS: ${CORPUS_ROOT:-./corpus}
+
+  git:
+    command: ${PYTHON}
+    args: ["-m", "pka.mcp.servers.git"]
+    env:
+      MCP_ALLOWED_ROOTS: ${CORPUS_ROOT:-./corpus}
+
+  postgres:
+    command: ${PYTHON}
+    args: ["-m", "pka.mcp.servers.postgres"]
+    allowed_tools: [describe_tables, query]
+    env:
+      READONLY_DATABASE_URL: ${READONLY_DATABASE_URL:-postgresql://pka_ro:pka_ro@localhost:5433/pka}
+
+  fetch:
+    command: ${PYTHON}
+    args: ["-m", "pka.mcp.servers.fetch"]
+    enabled: ${MCP_FETCH_ENABLED:-true}
